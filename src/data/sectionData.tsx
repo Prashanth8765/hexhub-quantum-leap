@@ -1,7 +1,7 @@
 
 import { 
   BookText, 
-  FileScanned, 
+  FileScan, 
   Code, 
   Globe, 
   GraduationCap,
@@ -27,7 +27,7 @@ export const sections: SectionData[] = [
   {
     id: "scan-document",
     title: "Scan Document",
-    icon: <FileScanned />,
+    icon: <FileScan />,
     description: "Scan, manage, and edit physical documents—all offline",
     colorClass: "bg-gradient-to-br from-purple-500 to-indigo-600"
   },
