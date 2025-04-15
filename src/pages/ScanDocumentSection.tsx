@@ -1,5 +1,5 @@
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { ArrowLeft, Camera, File, Download, Share2, Trash2, Edit, Save, FolderPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -49,11 +49,11 @@ const ScanDocumentSection = ({ onBack }: ScanDocumentSectionProps) => {
   const isMobile = useIsMobile();
 
   // Save to localStorage whenever documents or folders change
-  useCallback(() => {
+  useEffect(() => {
     localStorage.setItem("scanned-documents", JSON.stringify(documents));
   }, [documents]);
 
-  useCallback(() => {
+  useEffect(() => {
     localStorage.setItem("document-folders", JSON.stringify(folders));
   }, [folders]);
 
