@@ -37,7 +37,7 @@ const PreviewWindow = ({ html, css, js, deviceType }: PreviewWindowProps) => {
     }
   }, [html, css, js]);
 
-  // Set width based on device type
+  // Set width and height based on device type
   const getDeviceWidth = () => {
     switch (deviceType) {
       case "mobile":
@@ -53,7 +53,7 @@ const PreviewWindow = ({ html, css, js, deviceType }: PreviewWindowProps) => {
     <div className="w-full overflow-auto flex justify-center bg-muted p-4">
       <iframe
         ref={iframeRef}
-        className="border border-border bg-white"
+        className="border border-border bg-white shadow-md"
         style={{ 
           width: getDeviceWidth(),
           height: "600px",
