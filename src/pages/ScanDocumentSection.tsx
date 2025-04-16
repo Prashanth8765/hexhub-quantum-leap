@@ -1,221 +1,315 @@
-import React, { useState, useCallback } from "react";
-import { useDropzone } from "react-dropzone";
+
+import { useState } from "react";
+import { ArrowLeft, Camera, Upload, FileUp, Download, Trash } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { toast } from "@/hooks/use-toast";
-import { Copy, Check, Upload, File, Loader2 } from "lucide-react";
-import imageCompression from 'browser-image-compression';
-import html2pdf from 'html2pdf.js';
+import { toast } from "sonner";
+import Webcam from "react-webcam";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import html2pdf from "html2pdf.js";
+import { compressImage } from "browser-image-compression";
 
-const ScanDocumentSection = () => {
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [copied, setCopied] = useState(false);
+// Manual type definition for react-dropzone
+interface FileWithPreview extends File {
+  preview: string;
+}
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
-    handleFiles(acceptedFiles);
-  }, []);
+interface ScanDocumentSectionProps {
+  onBack: () => void;
+}
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: "image/*",
-    multiple: true,
-  });
+const ScanDocumentSection = ({ onBack }: ScanDocumentSectionProps) => {
+  const [capturedImages, setCapturedImages] = useState<string[]>([]);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState<FileWithPreview[]>([]);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
-  const handleFiles = async (files: File[]) => {
-    setIsLoading(true);
-    const compressedFiles = [];
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      try {
-        const compressedFile = await compressFile(file);
-        compressedFiles.push(compressedFile);
-        setProgress((i + 1) / files.length * 100);
-      } catch (error) {
-        console.error("Error compressing file:", error);
-        toast({
-          title: "Error compressing file",
-          description: `Could not compress ${file.name}. Please try again.`,
-          variant: "destructive",
-        });
-        setIsLoading(false);
-        return;
+  const handleCapture = () => {
+    const webcamElement = document.querySelector('video');
+    if (webcamElement) {
+      const canvas = document.createElement('canvas');
+      canvas.width = webcamElement.videoWidth;
+      canvas.height = webcamElement.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(webcamElement, 0, 0);
+        const imageUrl = canvas.toDataURL('image/jpeg');
+        setCapturedImages(prev => [...prev, imageUrl]);
+        toast.success("Image captured successfully!");
       }
     }
-
-    setSelectedFiles(compressedFiles);
-    setIsLoading(false);
-    toast({
-      title: "Files processed successfully",
-      description: "Your files have been compressed and are ready for PDF creation.",
-    });
   };
 
-  // The error is in the compressFile function. Let's fix it by converting the Blob to a File
-  const compressFile = async (imageFile: File): Promise<File> => {
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (files && files.length > 0) {
+      const newFiles = Array.from(files).map(file => {
+        const fileWithPreview = file as FileWithPreview;
+        fileWithPreview.preview = URL.createObjectURL(file);
+        return fileWithPreview;
+      });
+      setUploadedFiles(prev => [...prev, ...newFiles]);
+      toast.success(`${files.length} file(s) uploaded successfully!`);
+    }
+  };
+
+  const handleDrop = (acceptedFiles: File[]) => {
+    const newFiles = acceptedFiles.map(file => {
+      const fileWithPreview = file as FileWithPreview;
+      fileWithPreview.preview = URL.createObjectURL(file);
+      return fileWithPreview;
+    });
+    setUploadedFiles(prev => [...prev, ...newFiles]);
+    toast.success(`${acceptedFiles.length} file(s) uploaded successfully!`);
+  };
+
+  const handleDeleteImage = (index: number, isUploaded: boolean) => {
+    if (isUploaded) {
+      setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+    } else {
+      setCapturedImages(prev => prev.filter((_, i) => i !== index));
+    }
+    toast.success("Document deleted successfully!");
+  };
+
+  const handlePreviewImage = (src: string) => {
+    setSelectedImage(src);
+    setIsPreviewOpen(true);
+  };
+
+  // Compress file size
+  const compressFile = async (file: File) => {
     try {
       const options = {
         maxSizeMB: 1,
         maxWidthOrHeight: 1920,
-        useWebWorker: true,
+        useWebWorker: true
       };
       
-      const compressedBlob = await imageCompression(imageFile, options);
-      
-      // Convert Blob to File by creating a new File object
-      const compressedFile = new File(
-        [compressedBlob], 
-        imageFile.name, 
-        { type: compressedBlob.type, lastModified: Date.now() }
-      );
-      
-      return compressedFile;
+      return await compressImage(file, options);
     } catch (error) {
-      console.error("Error compressing file:", error);
-      return imageFile;
+      console.error("Error compressing image:", error);
+      return file;
     }
   };
 
-  const handleCopyToClipboard = () => {
-    if (selectedFiles.length === 0) {
-      toast({
-        title: "No files selected",
-        description: "Please select at least one file to copy",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const imageUrls = selectedFiles.map((file) => URL.createObjectURL(file));
-    navigator.clipboard.writeText(imageUrls.join("\n"));
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-    toast({
-      title: "Image URLs copied to clipboard",
-      description: "You can now paste the image URLs",
-    });
-  };
-
-  // The error is in the handleCreatePdf function. Let's fix the html2pdf call
+  // Create PDF from all scanned/uploaded documents
   const handleCreatePdf = async () => {
-    if (selectedFiles.length === 0) {
-      toast({
-        title: "No files selected",
-        description: "Please select at least one file to create a PDF",
-        variant: "destructive",
-      });
+    if (capturedImages.length === 0 && uploadedFiles.length === 0) {
+      toast.error("No documents to export!");
       return;
     }
 
-    try {
-      setIsLoading(true);
-      const container = document.createElement("div");
-
-      selectedFiles.forEach((file) => {
-        const img = document.createElement("img");
-        img.src = URL.createObjectURL(file);
-        img.style.width = "100%";
-        img.style.pageBreakAfter = "always";
-        container.appendChild(img);
-      });
-
-      document.body.appendChild(container);
-
-      // Fix the html2pdf constructor call
-      const pdfBlob = await html2pdf().from(container).outputPdf("blob");
-      
-      document.body.removeChild(container);
-
-      // Create a download link
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(pdfBlob);
-      link.download = "scanned_document.pdf";
-      link.click();
-
-      toast({
-        title: "PDF created successfully",
-        description: "Your PDF has been downloaded",
-      });
-    } catch (error) {
-      console.error("Error creating PDF:", error);
-      toast({
-        title: "Error creating PDF",
-        description: "There was an error creating your PDF",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
+    const container = document.createElement('div');
+    
+    // Add all captured images
+    capturedImages.forEach(img => {
+      const imgElement = document.createElement('img');
+      imgElement.src = img;
+      imgElement.style.width = '100%';
+      imgElement.style.marginBottom = '20px';
+      container.appendChild(imgElement);
+    });
+    
+    // Add all uploaded files
+    uploadedFiles.forEach(file => {
+      const imgElement = document.createElement('img');
+      imgElement.src = file.preview;
+      imgElement.style.width = '100%';
+      imgElement.style.marginBottom = '20px';
+      container.appendChild(imgElement);
+    });
+    
+    // Generate PDF
+    const opt = {
+      margin: 10,
+      filename: 'scanned_documents.pdf',
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+    
+    html2pdf().from(container).set(opt).save();
+    toast.success("PDF created successfully!");
   };
 
   return (
     <div className="container mx-auto py-8 px-4">
-      <h1 className="text-2xl font-bold mb-4">ScanDocument</h1>
-
-      <Card className="p-6 mb-4">
-        <div
-          {...getRootProps()}
-          className="relative border-2 border-dashed rounded-md p-8 cursor-pointer bg-muted hover:bg-accent transition-colors"
-        >
-          <input {...getInputProps()} />
-          <div className="text-center">
-            <Upload className="mx-auto h-6 w-6 text-muted-foreground mb-2" />
-            {isDragActive ? (
-              <p className="text-sm">Drop the files here ...</p>
-            ) : (
-              <p className="text-sm">
-                Drag 'n' drop some files here, or click to select files
-              </p>
-            )}
+      <div className="mb-6 flex items-center">
+        <Button variant="ghost" onClick={onBack} className="mr-2">
+          <ArrowLeft className="h-5 w-5" />
+          <span className="sr-only">Back</span>
+        </Button>
+        <h1 className="text-2xl font-bold">Scan Document</h1>
+      </div>
+      
+      {isCameraOpen ? (
+        <div className="mb-8 text-center">
+          <Webcam
+            audio={false}
+            mirrored={false}
+            className="mx-auto max-w-full border rounded-lg shadow-md"
+            height={480}
+            width={640}
+            screenshotFormat="image/jpeg"
+          />
+          <div className="mt-4 flex justify-center gap-3">
+            <Button onClick={handleCapture}>
+              <Camera className="mr-2 h-4 w-4" />
+              Capture
+            </Button>
+            <Button variant="outline" onClick={() => setIsCameraOpen(false)}>
+              Cancel
+            </Button>
           </div>
-          {isLoading && (
-            <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center bg-muted opacity-75">
-              <Loader2 className="animate-spin h-6 w-6" />
-            </div>
-          )}
         </div>
-      </Card>
-
-      {isLoading && (
-        <Progress value={progress} className="mb-4" />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+          <div className="border rounded-lg p-6 text-center flex flex-col items-center justify-center h-60">
+            <Button onClick={() => setIsCameraOpen(true)} className="mb-3">
+              <Camera className="mr-2 h-4 w-4" />
+              Open Camera
+            </Button>
+            <p className="text-sm text-muted-foreground max-w-xs">
+              Use your device camera to scan documents, receipts, whiteboards, and more.
+            </p>
+          </div>
+          
+          <div 
+            className="border rounded-lg p-6 text-center flex flex-col items-center justify-center h-60 border-dashed cursor-pointer hover:bg-accent/50 transition-colors"
+            onClick={() => document.getElementById('file-upload')?.click()}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                handleDrop(Array.from(e.dataTransfer.files));
+              }
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+          >
+            <Upload className="h-10 w-10 text-muted-foreground mb-4" />
+            <h3 className="font-medium mb-1">Drag and drop or click to upload</h3>
+            <p className="text-sm text-muted-foreground max-w-xs">
+              Upload PDF, JPG, PNG or other image files from your device.
+            </p>
+            <input
+              id="file-upload"
+              type="file"
+              multiple
+              className="hidden"
+              accept="image/*,application/pdf"
+              onChange={handleFileUpload}
+            />
+          </div>
+        </div>
       )}
-
-      {selectedFiles.length > 0 && (
-        <div className="mb-4">
-          <h2 className="text-lg font-medium mb-2">Selected Files</h2>
-          <div className="flex flex-wrap gap-2">
-            {selectedFiles.map((file, index) => (
-              <div key={index} className="flex items-center gap-1.5 py-1.5 px-3 rounded-md border border-border">
-                <File className="h-4 w-4" />
-                <p className="text-sm font-medium">{file.name}</p>
+      
+      {/* Document management section */}
+      <div className="mb-6 flex justify-between items-center">
+        <h2 className="text-xl font-semibold">Your Documents</h2>
+        {(capturedImages.length > 0 || uploadedFiles.length > 0) && (
+          <Button onClick={handleCreatePdf}>
+            <FileUp className="mr-2 h-4 w-4" />
+            Export to PDF
+          </Button>
+        )}
+      </div>
+      
+      {capturedImages.length === 0 && uploadedFiles.length === 0 ? (
+        <div className="text-center p-12 border rounded-lg bg-muted/30">
+          <p className="text-muted-foreground">No documents yet. Capture or upload to get started.</p>
+        </div>
+      ) : (
+        <ScrollArea className="h-[50vh]">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {capturedImages.map((src, index) => (
+              <div key={`captured-${index}`} className="border rounded-lg overflow-hidden group relative">
+                <img 
+                  src={src} 
+                  alt={`Captured document ${index + 1}`} 
+                  className="w-full h-48 object-cover cursor-pointer"
+                  onClick={() => handlePreviewImage(src)}
+                />
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                  <Button size="sm" variant="outline" onClick={() => handlePreviewImage(src)}>
+                    <Eye className="h-4 w-4" />
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => handleDeleteImage(index, false)}>
+                    <Trash className="h-4 w-4" />
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={() => {
+                      const link = document.createElement('a');
+                      link.href = src;
+                      link.download = `document-${index}.jpg`;
+                      link.click();
+                    }}
+                  >
+                    <Download className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="p-2 text-sm font-medium truncate">Captured Doc {index + 1}</div>
+              </div>
+            ))}
+            
+            {uploadedFiles.map((file, index) => (
+              <div key={`uploaded-${index}`} className="border rounded-lg overflow-hidden group relative">
+                <img 
+                  src={file.preview} 
+                  alt={file.name} 
+                  className="w-full h-48 object-cover cursor-pointer"
+                  onClick={() => handlePreviewImage(file.preview)}
+                />
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                  <Button size="sm" variant="outline" onClick={() => handlePreviewImage(file.preview)}>
+                    <Eye className="h-4 w-4" />
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => handleDeleteImage(index, true)}>
+                    <Trash className="h-4 w-4" />
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={() => {
+                      const link = document.createElement('a');
+                      link.href = file.preview;
+                      link.download = file.name;
+                      link.click();
+                    }}
+                  >
+                    <Download className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="p-2 text-sm font-medium truncate">{file.name}</div>
               </div>
             ))}
           </div>
-        </div>
+        </ScrollArea>
       )}
-
-      <div className="flex gap-2">
-        <Button onClick={handleCopyToClipboard} disabled={selectedFiles.length === 0 || isLoading}>
-          {copied ? (
-            <>
-              <Check className="h-4 w-4 mr-2" />
-              Copied!
-            </>
-          ) : (
-            <>
-              <Copy className="h-4 w-4 mr-2" />
-              Copy Image URLs
-            </>
+      
+      {/* Image Preview Dialog */}
+      <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Document Preview</DialogTitle>
+          </DialogHeader>
+          {selectedImage && (
+            <div className="text-center py-4">
+              <img 
+                src={selectedImage} 
+                alt="Document preview" 
+                className="max-h-[70vh] max-w-full mx-auto"
+              />
+            </div>
           )}
-        </Button>
-        <Button onClick={handleCreatePdf} disabled={selectedFiles.length === 0 || isLoading}>
-          Create PDF
-        </Button>
-      </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
