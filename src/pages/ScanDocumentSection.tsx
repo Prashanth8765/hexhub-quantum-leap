@@ -1,13 +1,12 @@
-
 import { useState } from "react";
-import { ArrowLeft, Camera, Upload, FileUp, Download, Trash } from "lucide-react";
+import { ArrowLeft, Camera, Upload, FileUp, Download, Trash, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import Webcam from "react-webcam";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import html2pdf from "html2pdf.js";
-import { compressImage } from "browser-image-compression";
+import imageCompression from "browser-image-compression";
 
 // Manual type definition for react-dropzone
 interface FileWithPreview extends File {
@@ -87,7 +86,7 @@ const ScanDocumentSection = ({ onBack }: ScanDocumentSectionProps) => {
         useWebWorker: true
       };
       
-      return await compressImage(file, options);
+      return await imageCompression(file, options);
     } catch (error) {
       console.error("Error compressing image:", error);
       return file;
