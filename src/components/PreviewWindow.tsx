@@ -14,26 +14,26 @@ const PreviewWindow = ({ html, css, js, deviceType }: PreviewWindowProps) => {
   useEffect(() => {
     if (iframeRef.current) {
       const iframe = iframeRef.current;
-      const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
       
-      if (iframeDoc) {
-        iframeDoc.open();
-        iframeDoc.write(`
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <meta charset="UTF-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <style>${css}</style>
-            </head>
-            <body>
-              ${html}
-              <script>${js}</script>
-            </body>
-          </html>
-        `);
-        iframeDoc.close();
-      }
+      // Create the HTML content as a data URL to avoid cross-origin issues
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>${css}</style>
+          </head>
+          <body>
+            ${html}
+            <script>${js}</script>
+          </body>
+        </html>
+      `;
+      
+      // Use data URL instead of direct document manipulation
+      const dataUrl = `data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`;
+      iframe.src = dataUrl;
     }
   }, [html, css, js]);
 
@@ -61,7 +61,7 @@ const PreviewWindow = ({ html, css, js, deviceType }: PreviewWindowProps) => {
           transition: "width 0.3s ease",
         }}
         title="Preview"
-        sandbox="allow-scripts"
+        sandbox="allow-scripts allow-same-origin"
       />
     </div>
   );
